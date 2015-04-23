@@ -53,6 +53,7 @@
           $scope.annotations = Annotation.query();
           $scope.selected = {annotation: null};
           $scope.user = null;
+          $scope.login_error = null;
           $scope.auth = {};
           $http.get('/api/auth/user/').then(function(result) {
             $scope.user = result.data;
@@ -103,6 +104,8 @@
         $scope.login = function() {
           $http.post('/api/auth/login/', $scope.auth).then(function() {
             init();
+          }, function() {
+            $scope.login_error = true;
           });
         };
 
@@ -212,13 +215,13 @@
       <!-- Log in screen -->
       <div ng-if="!user">
         <form class="form-horizontal">
-          <div class="form-group">
+          <div class="form-group" ng-class="{'has-error': login_error}">
             <label for="inputUsername" class="col-sm-2 control-label">Username</label>
             <div class="col-sm-10">
               <input type="text" class="form-control" id="inputUsername" placeholder="Username" ng-model="auth.username">
             </div>
           </div>
-          <div class="form-group">
+          <div class="form-group" ng-class="{'has-error': login_error}">
             <label for="inputPassword3" class="col-sm-2 control-label">Password</label>
             <div class="col-sm-10">
               <input type="password" class="form-control" id="inputPassword3" placeholder="Password" ng-model="auth.password">
