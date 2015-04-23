@@ -1,0 +1,13 @@
+### DB ###
+/db.sqlite3
+
+### Python ###
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+
+# Virtual environment
+/.venv/
+
+### Vim ###
+*.sw[pon]

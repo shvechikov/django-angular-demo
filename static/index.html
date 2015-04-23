@@ -1,0 +1,237 @@
+<!doctype html>
+<html ng-app="demoApp">
+  <head>
+    <title>Django + Angular.js Demo</title>
+
+    <script src="https://ajax.googleapis.com/ajax/libs/jquery/1.11.2/jquery.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/twitter-bootstrap/3.3.4/js/bootstrap.min.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/twitter-bootstrap/3.3.4/css/bootstrap.min.css">
+    <link rel="stylesheet" href="http://getbootstrap.com/examples/jumbotron-narrow/jumbotron-narrow.css">
+
+    <script src="https://ajax.googleapis.com/ajax/libs/angularjs/1.3.15/angular.min.js"></script>
+    <script src="https://ajax.googleapis.com/ajax/libs/angularjs/1.3.15/angular-route.min.js"></script>
+    <script src="https://ajax.googleapis.com/ajax/libs/angularjs/1.3.15/angular-resource.min.js"></script>
+    <script>
+      var app = angular.module('demoApp', ['ngRoute', 'ngResource']);
+
+      app.config(function($httpProvider) {
+        $httpProvider.defaults.xsrfCookieName = 'csrftoken';
+        $httpProvider.defaults.xsrfHeaderName = 'X-CSRFToken';
+      });
+
+      app.config(function($resourceProvider) {
+        $resourceProvider.defaults.stripTrailingSlashes = false;
+      });
+
+      // Little hack for ng-resource to make it more REST-ish
+      app.factory('Resource', [ '$resource', function( $resource ) {
+        return function( url, params, methods ) {
+          var defaults = {
+            update: { method: 'put', isArray: false },
+            create: { method: 'post' }
+          };
+          methods = angular.extend( defaults, methods );
+
+          var resource = $resource( url, params, methods );
+          resource.prototype.$save = function() {
+            if ( !this.id ) {
+              return this.$create();
+            } else {
+              return this.$update();
+            }
+          };
+          return resource;
+        };
+      }]);
+
+      app.factory('Annotation', function(Resource) {
+        return Resource('/api/annotations/:id', {id: '@id'});
+      });
+
+      app.controller('DemoCtrl', function($scope, $http, Annotation) {
+        function init() {
+          $scope.annotations = Annotation.query();
+          $scope.selected = {annotation: null};
+          $scope.user = null;
+          $scope.auth = {};
+          $http.get('/api/auth/user/').then(function(result) {
+            $scope.user = result.data;
+          });
+        };
+
+        init();
+
+        $scope.save = function(annotation) {
+          var created = !annotation.id;
+          annotation.$save().then(function(saved) {
+            if (created) {
+              $scope.annotations.push(saved);
+            };
+            $scope.annotations.sort(function(a, b) {
+              return a.start_time - b.start_time;
+            });
+          });
+        };
+
+        $scope.add = function() {
+          $scope.selected.annotation = new Annotation({});
+        };
+
+        $scope.get_selected_index = function() {
+          for (var i = 0; i < $scope.annotations.length; i++) {
+            if ($scope.annotations[i].id === $scope.selected.annotation.id) {
+              return i
+            }
+          }
+          return -1;
+        }
+
+        $scope.select_next = function() {
+          var i = $scope.get_selected_index();
+          if (i < $scope.annotations.length - 1) {
+            $scope.selected.annotation = $scope.annotations[i + 1];
+          }
+        };
+
+        $scope.select_prev = function() {
+          var i = $scope.get_selected_index();
+          if (i > 0) {
+            $scope.selected.annotation = $scope.annotations[i - 1];
+          }
+        };
+
+        $scope.login = function() {
+          $http.post('/api/auth/login/', $scope.auth).then(function() {
+            init();
+          });
+        };
+
+        $scope.logout = function() {
+          $http.post('/api/auth/logout/').then(function() {
+            init();
+          });
+        }
+
+      });
+    </script>
+  </head>
+
+  <body ng-controller="DemoCtrl">
+    <div class="container">
+      <div class="header clearfix">
+        <nav>
+          <ul class="nav nav-pills pull-right">
+            <li role="presentation" ng-if="user"><a href="#" ng-click="logout()">Logout ({{user.username}})</a></li>
+          </ul>
+        </nav>
+        <h3 class="text-muted">Django + Angular.js Demo</h3>
+      </div>
+
+      <div ng-if="user">
+        <form class="form-horizontal">
+          <div class="form-group">
+              <label for="selectAnnotation" class="col-sm-2 control-label">Choose one:</label>
+              <div class="col-sm-4">
+                <select
+                    id="selectAnnotation"
+                    class="form-control"
+                    ng-options="annotation.text for annotation in annotations track by annotation.id"
+                    ng-model="selected.annotation">
+                </select>
+              </div>
+              <label for="selectAnnotation" class="col-sm-2 control-label">Add new one:</label>
+              <div class="col-sm-4">
+                <button type="button" class="btn btn-block btn-success" ng-click="add()">Add annotation</button>
+              </div>
+          </div>
+        </form>
+
+
+        <form class="form-horizontal" ng-if="selected.annotation">
+          <hr>
+          <div class="form-group">
+            <div class="col-sm-offset-2 col-sm-5">
+              <button type="button"
+                      class="btn btn-block btn-default"
+                      ng-click="select_prev()"
+                      ng-disabled="(!selected.annotation.id) || get_selected_index() === 0"
+                ><span class="glyphicon glyphicon-chevron-left" aria-hidden="true"></span>
+                Previous
+              </button>
+            </div>
+            <div class="col-sm-5">
+              <button type="button"
+                      class="btn btn-block btn-default"
+                      ng-click="select_next()"
+                      ng-disabled="(!selected.annotation.id) || get_selected_index() === (annotations.length - 1)"
+                >Next
+                <span class="glyphicon glyphicon-chevron-right" aria-hidden="true"></span>
+              </button>
+            </div>
+          </div>
+          <div class="form-group">
+            <label for="inputText" class="col-sm-2 control-label">Text</label>
+            <div class="col-sm-10">
+              <input type="text" class="form-control" id="inputText" placeholder="Text" ng-model="selected.annotation.text">
+            </div>
+          </div>
+          <div class="form-group">
+            <label for="inputStartTime" class="col-sm-2 control-label">Start Time</label>
+            <div class="col-sm-10">
+              <input type="number" class="form-control" id="inputStartTime" ng-model="selected.annotation.start_time">
+            </div>
+          </div>
+          <div class="form-group">
+            <label for="inputEndTime" class="col-sm-2 control-label">End Time</label>
+            <div class="col-sm-10">
+              <input type="number" class="form-control" id="inputEndTime" ng-model="selected.annotation.end_time">
+            </div>
+          </div>
+          <div class="form-group">
+            <div class="col-sm-offset-2 col-sm-10">
+              <button type="button" class="btn btn-success" ng-click="save(selected.annotation)">
+                {{ selected.annotation.id ? 'Update' : 'Add' }}
+              </button>
+            </div>
+          </div>
+        </form>
+
+        <div ng-if="annotations.length">
+          <hr>
+          <h3>Full list of annotations:</h3>
+
+          <ul>
+            <li ng-repeat="annotation in annotations">
+              {{ annotation.text }}
+              ({{ annotation.start_time }} - {{ annotation.end_time }})
+            </li>
+          </ul>
+        </div>
+      </div>
+
+      <!-- Log in screen -->
+      <div ng-if="!user">
+        <form class="form-horizontal">
+          <div class="form-group">
+            <label for="inputUsername" class="col-sm-2 control-label">Username</label>
+            <div class="col-sm-10">
+              <input type="text" class="form-control" id="inputUsername" placeholder="Username" ng-model="auth.username">
+            </div>
+          </div>
+          <div class="form-group">
+            <label for="inputPassword3" class="col-sm-2 control-label">Password</label>
+            <div class="col-sm-10">
+              <input type="password" class="form-control" id="inputPassword3" placeholder="Password" ng-model="auth.password">
+            </div>
+          </div>
+          <div class="form-group">
+            <div class="col-sm-offset-2 col-sm-10">
+              <button type="submit" class="btn btn-default" ng-click="login()">Sign in</button>
+            </div>
+          </div>
+        </form>
+      </div>
+
+    </div>
+  </body>
+</html>
